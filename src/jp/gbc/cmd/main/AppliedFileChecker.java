@@ -39,6 +39,7 @@ import org.apache.commons.logging.LogFactory;
 import jp.gbc.cmd.item.AppliedFileItem;
 import jp.gbc.cmd.manager.AppliedFileManager;
 import jp.gbc.cmd.manager.AppliedFileVisitor;
+import jp.gbc.cmd.manager.IgnoreManager;
 import jp.gbc.cmd.util.FileUtils;
 import jp.gbc.cmd.util.PathUtils;
 
@@ -60,7 +61,7 @@ public class AppliedFileChecker {
 	/** XXX */
 	private Options optionsAll = new Options();
 	/** XXX */
-	private List<String> orderOptions = Arrays.asList("M", "o", "T", "b", "f", "d", "h", "v");
+	private List<String> orderOptions = Arrays.asList("M", "i", "o", "T", "b", "f", "d", "h", "v");
 
 	/**
 	 * コンストラクタ
@@ -77,14 +78,16 @@ public class AppliedFileChecker {
 		try {
 
 			Builder optionMake = Option.builder("M").longOpt(Apps.PARAM_MAKE).type(String.class)
-					.hasArgs().argName("directory").desc("Make configuration management file of directory.");
+					.hasArgs().argName("directory ...").desc("Make configuration management file of directorys.");
 			Builder optionTest = Option.builder("T").longOpt(Apps.PARAM_TEST).type(String.class)
-					.hasArgs().argName("conf.mana.file").desc("Test the configuration management file.");
+					.hasArgs().argName("afc_file ...").desc("Test the applied file checker files.");
 
+			Builder optionIgnore = Option.builder("i").longOpt(Apps.PARAM_IGNORE).type(String.class)
+					.hasArg().argName("ignore_file").desc("Make ignore.");
 			Builder optionOutput = Option.builder("o").longOpt(Apps.PARAM_OUTPUT).type(String.class)
-			.hasArg().argName("make output").desc("Make output.");
+					.hasArg().argName("afc_file").desc("Make output.");
 			Builder optionBasepath = Option.builder("b").longOpt(Apps.PARAM_BASEPATH).type(String.class)
-					.hasArgs().argName("test basepaths").desc("Test basepaths.");
+					.hasArgs().argName("base_path ...").desc("Test basepaths.");
 
 			Builder optionForced = Option.builder("f").longOpt(Apps.PARAM_FORCED).type(Boolean.class)
 					.hasArg(false).desc("Turn on forced.");
@@ -99,6 +102,7 @@ public class AppliedFileChecker {
 			optionsAll.addOption(optionMake.build());
 			optionsAll.addOption(optionTest.build());
 
+			optionsAll.addOption(optionIgnore.build());
 			optionsAll.addOption(optionOutput.build());
 			optionsAll.addOption(optionBasepath.build());
 
@@ -166,6 +170,11 @@ public class AppliedFileChecker {
 					Apps.setMakeArgs(optValues);
 					Apps.setMake(true);
 
+					if (cmd.hasOption(Apps.PARAM_IGNORE)) {
+						String optValue = cmd.getOptionValue(Apps.PARAM_IGNORE);
+						Apps.setIgnore(optValue);
+					}
+
 					if (cmd.hasOption(Apps.PARAM_OUTPUT)) {
 						String optValue = cmd.getOptionValue(Apps.PARAM_OUTPUT);
 						Apps.setOutput(optValue);
@@ -184,6 +193,7 @@ public class AppliedFileChecker {
 					.append(String.format("Apps.forced=[%s]\n", Apps.isForced()))
 					.append(String.format("Apps.debug=[%s]\n", Apps.isDebug()))
 					.append(String.format("Apps.make=[%s]\n", Apps.isMake()))
+					.append(String.format("Apps.ignore=[%s]\n", Apps.getIgnore().toString()))
 					.append(String.format("Apps.output=[%s]\n", Apps.getOutput().toString()))
 					.append(String.format("Apps.test=[%s]\n", Apps.isTest()))
 					.append(String.format("Apps.basepath=[%s]\n", Apps.getBasepaths().toString()))
@@ -228,13 +238,22 @@ public class AppliedFileChecker {
 		Path output = null;
 		if (!StringUtils.isEmpty(Apps.getOutput())) {
 			String outputFile = Apps.getOutput();
-			output = Paths.get(System.getProperty("user.dir"), outputFile);
+			Path op = Paths.get(outputFile);
+			if (op.isAbsolute()) {
+				output = Paths.get(outputFile);
+			} else {
+				output = Paths.get(System.getProperty("user.dir"), outputFile);
+			}
+
 			if (Apps.isForced()) {
 				Files.deleteIfExists(output);
 			} else if (Files.exists(output)) {
 				throw new FileAlreadyExistsException(outputFile);
 			}
 		}
+
+		IgnoreManager iMng = new IgnoreManager();
+		iMng.load(Apps.getIgnore());
 
 		int dirCount = 0;
 		for (String dir : makeArgs) {
@@ -243,7 +262,7 @@ public class AppliedFileChecker {
 				dir = PathUtils.convDirectoryPath(dir);
 			}
 			Path basePath = Paths.get(dir);
-			AppliedFileVisitor afv = new AppliedFileVisitor(basePath);
+			AppliedFileVisitor afv = new AppliedFileVisitor(basePath, iMng);
 			try {
 				Files.walkFileTree(basePath, afv);
 			} catch (IOException e) {
@@ -274,10 +293,10 @@ public class AppliedFileChecker {
 	}
 
 	private void performTest() throws Exception {
-		String[] makeArgs = Apps.getTestArgs();
+		String[] testArgs = Apps.getTestArgs();
 		String[] optBasepaths = Apps.getBasepaths();
 
-		for (String file : makeArgs) {
+		for (String file : testArgs) {
 			try (BufferedReader reader = Files.newBufferedReader(Paths.get(file), StandardCharsets.UTF_8)) {
 				String line;
 				Path basePath = null;
@@ -368,7 +387,7 @@ public class AppliedFileChecker {
 	 * printVersion処理
 	 */
 	private void printVersion() {
-		log.info(String.format("AppliedFileChecker.jar version \"%s\"\n", "1.0.0"));
+		log.info(String.format("AppliedFileChecker.jar version \"%s\"\n", "1.1.0"));
 	}
 
 	/**

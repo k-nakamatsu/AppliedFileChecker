@@ -3,7 +3,6 @@ package jp.gbc.cmd.manager;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
@@ -29,10 +28,13 @@ public class AppliedFileVisitor implements FileVisitor<Path> {
 	protected List<String> resultLineList = new ArrayList<String>();
 	public static String STR_PREFIX_AFCDIR = "AFCDIR:";
 
-	public AppliedFileVisitor(Path basePath) {
+	protected IgnoreManager iMng;
+
+	public AppliedFileVisitor(Path basePath, IgnoreManager iMng) {
 		super();
 		this.basePath = basePath;
 		setResult(String.format("%s%s", STR_PREFIX_AFCDIR, this.basePath));
+		this.iMng = iMng;
 	}
 
 	public int getFileCount() {
@@ -53,10 +55,18 @@ public class AppliedFileVisitor implements FileVisitor<Path> {
 	 */
 	@Override
 	public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+		if (iMng.isIgnore(dir, attrs)) {
+			if(Apps.isDebug()) {
+				print("preVisitDirectory : " + dir.getFileName() + " is ignore.");
+			}
+			return FileVisitResult.SKIP_SUBTREE;
+		}
+
 		if(Apps.isDebug()) {
 			print("preVisitDirectory : " + dir.getFileName());
 			this.indentSize++;
 		}
+
 		return FileVisitResult.CONTINUE;
 	}
 
@@ -70,13 +80,21 @@ public class AppliedFileVisitor implements FileVisitor<Path> {
 	 */
 	@Override
 	public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+		if (iMng.isIgnore(file, attrs)) {
+			if(Apps.isDebug()) {
+				print("visitFile : " + file.getFileName() + " is ignore.");
+			}
+			return FileVisitResult.CONTINUE;
+		}
+
 		if(Apps.isDebug()) {
 			print("visitFile : " + file.getFileName());
 		}
-		FileTime fileTime = Files.getLastModifiedTime(file);
+
+		FileTime fileTime = attrs.lastModifiedTime();
 		Instant instant = fileTime.toInstant();
 		LocalDateTime localDateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
-		AppliedFileItem newItem = new AppliedFileItem(basePath.relativize(file), localDateTime, Files.size(file));
+		AppliedFileItem newItem = new AppliedFileItem(basePath.relativize(file), localDateTime, attrs.size());
 		setResult(AppliedFileManager.toLineData(newItem));
 		fileCount++;
 		return FileVisitResult.CONTINUE;
@@ -132,6 +150,9 @@ public class AppliedFileVisitor implements FileVisitor<Path> {
 		return relative;
 	}
 
+	/**
+	 * @param line
+	 */
 	protected void setResult(String line) {
 		resultLineList.add(line);
 		System.out.println(String.format("%s", line));

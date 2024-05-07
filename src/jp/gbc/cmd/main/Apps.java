@@ -21,6 +21,9 @@ public class Apps extends Properties {
 	/** XXX */
 	public static final String PARAM_OUTPUT = "output";
 	/** XXX */
+	public static final String PARAM_IGNORE = "ignore";
+
+	/** XXX */
 	public static final String PARAM_BASEPATH = "basepath";
 
 	/** XXX */
@@ -36,6 +39,8 @@ public class Apps extends Properties {
 	private static boolean _make = false;
 	/** XXX */
 	private static String[] _makeArgs = new String[0];
+	/** XXX */
+	private static String _ignore = StringUtils.EMPTY;
 	/** XXX */
 	private static String _output = StringUtils.EMPTY;
 	/** XXX */
@@ -93,6 +98,14 @@ public class Apps extends Properties {
 
 	public static void setMakeArgs(String[] _makeArgs) {
 		Apps._makeArgs = _makeArgs;
+	}
+
+	public static String getIgnore() {
+		return _ignore;
+	}
+
+	public static void setIgnore(String _ignore) {
+		Apps._ignore = _ignore;
 	}
 
 	public static String getOutput() {
